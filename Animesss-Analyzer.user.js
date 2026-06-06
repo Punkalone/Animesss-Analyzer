@@ -1,7 +1,14 @@
 // ==UserScript==
 // @name         Animesss Analyzer
+// @namespace    https://github.com/Punkalone
+// @version      2.1
+// @description  Animesss card analyzer
+// @author       Punkalone
 // @match        *://animesss.com/user/cards/*
 // @grant        none
+
+// @updateURL    https://raw.githubusercontent.com/Punkalone/Animesss-Analyzer/main/Animesss-Analyzer.user.js
+// @downloadURL  https://raw.githubusercontent.com/Punkalone/Animesss-Analyzer/main/Animesss-Analyzer.user.js
 // ==/UserScript==
 
 (function () {
