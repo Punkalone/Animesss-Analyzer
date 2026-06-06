@@ -65,13 +65,24 @@ btn.textContent =
     : '📊 Анализировать ВСЁ';
 
         btn.style.position = 'fixed';
-        btn.style.top = '20px';
-        btn.style.right = '20px';
+
+const savedPos =
+    JSON.parse(
+        localStorage.getItem(
+            'animesss_btn_pos'
+        ) || '{}'
+    );
+
+btn.style.left =
+    savedPos.left || '20px';
+
+btn.style.top =
+    savedPos.top || '20px';
         btn.style.zIndex = '999999';
         btn.style.padding = '10px 20px';
         btn.style.cursor = 'pointer';
         btn.style.transition =
-    'all .15s ease';
+    'transform .15s ease, left .12s ease-out, top .12s ease-out';
         btn.onmouseover = () => {
 
     btn.style.transform =
@@ -154,6 +165,83 @@ progressBox.innerHTML = `
 `;
 
 document.body.appendChild(btn);
+       let dragging = false;
+let moved = false;
+
+let offsetX = 0;
+let offsetY = 0;
+
+btn.addEventListener(
+    'mousedown',
+    e => {
+
+        dragging = true;
+        moved = false;
+
+        offsetX =
+            e.clientX -
+            btn.offsetLeft;
+
+        offsetY =
+            e.clientY -
+            btn.offsetTop;
+    }
+);
+
+document.addEventListener(
+    'mousemove',
+    e => {
+
+        if (!dragging) {
+            return;
+        }
+        moved = true;
+
+        btn.style.left =
+            (e.clientX - offsetX)
+            + 'px';
+
+        btn.style.top =
+            (e.clientY - offsetY)
+            + 'px';
+    }
+);
+
+document.addEventListener(
+    'mouseup',
+    () => {
+
+        if (!dragging) {
+            return;
+        }
+
+        dragging = false;
+
+        localStorage.setItem(
+            'animesss_btn_pos',
+            JSON.stringify({
+                left: btn.style.left,
+                top: btn.style.top
+            })
+        );
+    }
+);
+        btn.addEventListener(
+    'click',
+    e => {
+
+        if (moved) {
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            moved = false;
+
+            return false;
+        }
+    },
+    true
+);
 document.body.appendChild(progressBox);
 
         let isOpen = false;
