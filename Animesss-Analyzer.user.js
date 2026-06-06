@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Animesss Analyzer
 // @namespace    https://github.com/Punkalone
-// @version      2.1
+// @version      2.2
 // @description  Animesss card analyzer
 // @author       Punkalone
 // @match        *://animesss.com/user/cards/*
