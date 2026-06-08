@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Animesss Analyzer
 // @namespace    https://github.com/Punkalone
-// @version      2.2
+// @version      2.3
 // @description  Animesss card analyzer
 // @author       Punkalone
 // @match        *://animesss.com/user/cards/*
@@ -13,6 +13,66 @@
 
 (function () {
     'use strict';
+    const style = document.createElement('style');
+
+style.textContent = `
+
+@keyframes animesssGlowGold {
+
+    0% {
+        box-shadow:
+            0 0 20px rgba(255,215,0,.5);
+    }
+
+    50% {
+        box-shadow:
+            0 0 35px rgba(255,215,0,.75);
+    }
+
+    100% {
+        box-shadow:
+            0 0 20px rgba(255,215,0,.5);
+    }
+}
+
+@keyframes animesssGlowSilver {
+
+    0% {
+        box-shadow:
+            0 0 20px rgba(192,192,192,.5);
+    }
+
+    50% {
+        box-shadow:
+           0 0 30px rgba(192,192,192,.7);
+    }
+
+    100% {
+        box-shadow:
+            0 0 20px rgba(192,192,192,.5);
+    }
+}
+
+@keyframes animesssGlowBronze {
+
+    0% {
+        box-shadow:
+            0 0 20px rgba(205,127,50,.5);
+    }
+
+    50% {
+        box-shadow:
+            0 0 30px rgba(205,127,50,.7);
+    }
+
+    100% {
+        box-shadow:
+            0 0 20px rgba(205,127,50,.5);
+    }
+}
+`;
+
+document.head.appendChild(style);
 
     const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -353,6 +413,30 @@ btn.addEventListener('click', async () => {
         ) || '[]'
     );
 
+const allKnownCards = [];
+
+Object.keys(localStorage)
+    .filter(key =>
+        key.startsWith(
+            `animesss_scan_${username}`
+        )
+    )
+    .forEach(key => {
+
+        try {
+
+            const cards =
+                JSON.parse(
+                    localStorage.getItem(key)
+                ) || [];
+
+            allKnownCards.push(
+                ...cards
+            );
+
+        } catch (e) {}
+    });
+
 if (
     savedCards.length === 0
     &&
@@ -380,17 +464,56 @@ if (
 }
 
 const savedMap =
-    new Map(
-        savedCards.map(card => [
-            String(card.id),
-            card
-        ])
+    new Map();
+        const allCache =
+    JSON.parse(
+        localStorage.getItem(
+            `animesss_scan_${username}_all`
+        ) || '[]'
     );
+
+if (allCache.length > 0) {
+
+    console.log(
+        `Использую общий кэш (${allCache.length})`
+    );
+
+    if (rank) {
+
+        allCards.push(
+            ...allCache.filter(
+                card =>
+                    (card.rank || '')
+                        .toLowerCase()
+                    === rank.toLowerCase()
+            )
+        );
+
+    } else {
+
+        allCards.push(
+            ...allCache
+        );
+    }
+}
+
+allKnownCards.forEach(card => {
+
+    savedMap.set(
+        String(card.id),
+        card
+    );
+});
+        console.log(
+    `Известных карт в кэше: ${savedMap.size}`
+);
         let completed = 0;
 
 const scanStartTime = Date.now();
 
-        for (let page = 1; page <= maxPages; page++) {
+        if (allCards.length === 0) {
+
+    for (let page = 1; page <= maxPages; page++) {
 
             document.querySelector('#animesss-status')
                 .textContent =
@@ -415,14 +538,15 @@ const scanStartTime = Date.now();
     const id =
         String(card.dataset.id);
 
-    if (savedMap.has(id)) {
+    const cachedCard =
+    savedMap.get(id);
 
-        allCards.push(
-            savedMap.get(id)
-        );
+if (cachedCard) {
 
-        return;
-    }
+    allCards.push(cachedCard);
+
+    return;
+}
 
     allCards.push({
         id,
@@ -444,14 +568,43 @@ const scanStartTime = Date.now();
         console.log(
             `Найдено карт: ${allCards.length}`
         );
+            }
 const cardsToScan =
-    allCards.filter(
-        card =>
+    allCards.filter(card => {
+
+        return (
             card.total === undefined
-    );
+            ||
+            card.wanted === undefined
+            ||
+            card.trade === undefined
+            ||
+            !card.lastUpdate
+        );
+
+    });
+
+const randomCards =
+    allCards
+    .filter(
+        card =>
+            !cardsToScan.includes(card)
+    )
+    .sort(
+        () => Math.random() - 0.5
+    )
+    .slice(0, 20);
+
+cardsToScan.push(
+    ...randomCards
+);
 
 console.log(
-    `Новых карт: ${cardsToScan.length}`
+    `+ случайных карт: ${randomCards.length}`
+);
+
+console.log(
+    `Всего к обновлению: ${cardsToScan.length}`
 );
         for (let i = 0; i < cardsToScan.length; i++) {
 
@@ -489,13 +642,18 @@ console.log(
                         doc.querySelector('#owners-trade')
                             ?.textContent || 0
                     );
+                card.lastUpdate =
+    Date.now();
 
             } catch (e) {
 
-                card.total = -1;
-                card.wanted = -1;
-                card.trade = -1;
-            }
+    card.total = -1;
+    card.wanted = -1;
+    card.trade = -1;
+
+    card.lastUpdate =
+        Date.now();
+}
             completed++;
 
             const percent =
@@ -651,22 +809,22 @@ const uniqueCards =
     const topValue =
         [...uniqueCards]
         .sort((a,b) => b.valueScore - a.valueScore)
-        .slice(0,10);
+        .slice(0,50);
 
     const topRare =
         [...uniqueCards]
         .sort((a,b) => b.rareScore - a.rareScore)
-        .slice(0,10);
+        .slice(0,50);
 
     const topDemand =
         [...uniqueCards]
         .sort((a,b) => b.demandScore - a.demandScore)
-        .slice(0,10);
+        .slice(0,50);
 
     const topTrash =
         [...uniqueCards]
         .sort((a,b) => b.trashScore - a.trashScore)
-        .slice(0,10);
+        .slice(0,50);
     function renderGrid(cards) {
 
     return `
@@ -697,24 +855,31 @@ const uniqueCards =
     overflow:hidden;
     transition:all .2s ease;
     cursor:pointer;
+    animation:${
+    i === 0
+    ? 'animesssGlowGold 2.5s infinite'
+    : i === 1
+    ? 'animesssGlowSilver 2.5s infinite'
+    : i === 2
+    ? 'animesssGlowBronze 2.5s infinite'
+    : 'none'
+};
 
     box-shadow:${
-        i === 0
-        ? '0 0 25px rgba(255,215,0,.4)'
-        : i === 1
-        ? '0 0 20px rgba(192,192,192,.3)'
-        : i === 2
-        ? '0 0 20px rgba(205,127,50,.3)'
-        : 'none'
-    };
+    i === 0
+    ? '0 0 12px rgba(255,215,0,.35)'
+    : i === 1
+    ? '0 0 10px rgba(192,192,192,.3)'
+    : i === 2
+    ? '0 0 10px rgba(205,127,50,.3)'
+    : 'none'
+};
 "
 onmouseover="
     this.style.transform='scale(1.05)';
-    this.style.boxShadow='0 0 20px rgba(255,255,255,.15)';
 "
 onmouseout="
     this.style.transform='scale(1)';
-    this.style.boxShadow='none';
 ">
 
                     <img
@@ -752,7 +917,11 @@ onmouseout="
         position:absolute;
         top:10px;
         right:10px;
-        background:gold;
+        background:linear-gradient(
+    135deg,
+    #FFD700,
+    #FFA500
+);
         color:black;
         font-weight:bold;
         padding:4px 8px;
@@ -768,7 +937,11 @@ onmouseout="
         position:absolute;
         top:10px;
         right:10px;
-        background:silver;
+        background:linear-gradient(
+    135deg,
+    #f0f0f0,
+    #a0a0a0
+);
         color:black;
         font-weight:bold;
         padding:4px 8px;
@@ -784,7 +957,11 @@ onmouseout="
         position:absolute;
         top:10px;
         right:10px;
-        background:#CD7F32;
+        background:linear-gradient(
+    135deg,
+    #CD7F32,
+    #8B4513
+);
         color:white;
         font-weight:bold;
         padding:4px 8px;
@@ -1118,6 +1295,18 @@ if (firstTab) {
     document
     .querySelector('#animesss-close')
     .onclick = () => modal.remove();
+    modal.addEventListener(
+    'click',
+    e => {
+
+        if (
+            e.target === modal
+        ) {
+
+            modal.remove();
+        }
+    }
+);
 
 }
     createUI();
