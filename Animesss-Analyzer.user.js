@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Animesss Analyzer
 // @namespace    https://github.com/Punkalone
-// @version      2.3
+// @version      2.4
 // @description  Animesss card analyzer
 // @author       Punkalone
 // @match        *://animesss.com/user/cards/*
@@ -32,6 +32,23 @@ style.textContent = `
     100% {
         box-shadow:
             0 0 20px rgba(255,215,0,.5);
+    }
+}
+
+@keyframes animesssCardAppear {
+
+    from {
+
+        opacity:0;
+        transform:translateY(20px);
+
+    }
+
+    to {
+
+        opacity:1;
+        transform:translateY(0);
+
     }
 }
 
@@ -504,16 +521,11 @@ allKnownCards.forEach(card => {
         card
     );
 });
-        console.log(
-    `Известных карт в кэше: ${savedMap.size}`
-);
         let completed = 0;
 
 const scanStartTime = Date.now();
 
-        if (allCards.length === 0) {
-
-    for (let page = 1; page <= maxPages; page++) {
+        for (let page = 1; page <= maxPages; page++) {
 
             document.querySelector('#animesss-status')
                 .textContent =
@@ -543,10 +555,23 @@ const scanStartTime = Date.now();
 
 if (cachedCard) {
 
-    allCards.push(cachedCard);
+    if (
+        !allCards.some(
+            x => String(x.id) === id
+        )
+    ) {
+
+        allCards.push(cachedCard);
+    }
 
     return;
 }
+
+    if (
+    !allCards.some(
+        x => String(x.id) === id
+    )
+) {
 
     allCards.push({
         id,
@@ -559,16 +584,11 @@ if (cachedCard) {
             card.querySelector("img")?.src ||
             ""
     });
+}
 
-            });
+        });
 
-            await sleep(300);
-        }
-
-        console.log(
-            `Найдено карт: ${allCards.length}`
-        );
-            }
+}
 const cardsToScan =
     allCards.filter(card => {
 
@@ -828,8 +848,8 @@ const uniqueCards =
     function renderGrid(cards) {
 
     return `
-        <div style="
-            display:grid;
+    <div id="animesss-grid" style="
+        display:grid;
             grid-template-columns:
                 repeat(auto-fill,minmax(180px,1fr));
             gap:20px;
@@ -855,6 +875,7 @@ const uniqueCards =
     overflow:hidden;
     transition:all .2s ease;
     cursor:pointer;
+    animation-delay:${i * 0.03}s;
     animation:${
     i === 0
     ? 'animesssGlowGold 2.5s infinite'
@@ -1226,6 +1247,31 @@ ${
     ;
 
     document.body.appendChild(modal);
+    setTimeout(() => {
+
+    document
+        .querySelectorAll('#animesss-grid > div')
+        .forEach((card, i) => {
+
+            card.style.opacity = '0';
+            card.style.transform =
+                'translateY(20px)';
+
+            setTimeout(() => {
+
+                card.style.transition =
+                    'all .35s ease';
+
+                card.style.opacity = '1';
+
+                card.style.transform =
+                    'translateY(0)';
+
+            }, i * 30);
+
+        });
+
+}, 10);
     const tabs = currentRank
 
 ? {
