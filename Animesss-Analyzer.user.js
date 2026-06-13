@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Animesss Analyzer
 // @namespace    https://github.com/Punkalone
-// @version      2.4
+// @version      3
 // @description  Animesss card analyzer
 // @author       Punkalone
 // @match        *://animesss.com/user/cards/*
@@ -394,8 +394,6 @@ btn.addEventListener('click', async () => {
         const rank =
     new URL(location.href)
     .searchParams.get('rank');
-        const storageRank =
-    rank || 'all';
 
         document.querySelector('#animesss-status')
             .textContent =
@@ -423,65 +421,7 @@ btn.addEventListener('click', async () => {
             Math.max(1, ...pageNumbers);
 
         const allCards = [];
-        let savedCards =
-    JSON.parse(
-        localStorage.getItem(
-            `animesss_scan_${username}_${storageRank}`
-        ) || '[]'
-    );
-
-const allKnownCards = [];
-
-Object.keys(localStorage)
-    .filter(key =>
-        key.startsWith(
-            `animesss_scan_${username}`
-        )
-    )
-    .forEach(key => {
-
-        try {
-
-            const cards =
-                JSON.parse(
-                    localStorage.getItem(key)
-                ) || [];
-
-            allKnownCards.push(
-                ...cards
-            );
-
-        } catch (e) {}
-    });
-
-if (
-    savedCards.length === 0
-    &&
-    rank
-) {
-
-    const allCardsCache =
-        JSON.parse(
-            localStorage.getItem(
-                `animesss_scan_${username}_all`
-            ) || '[]'
-        );
-
-    savedCards =
-        allCardsCache.filter(
-            card =>
-                (card.rank || '')
-                    .toLowerCase()
-                === rank.toLowerCase()
-        );
-
-    console.log(
-        `Использован общий кэш: ${savedCards.length}`
-    );
-}
-
-const savedMap =
-    new Map();
+        let physicalCardsCount = 0;
         const allCache =
     JSON.parse(
         localStorage.getItem(
@@ -489,37 +429,16 @@ const savedMap =
         ) || '[]'
     );
 
-if (allCache.length > 0) {
+const savedMap =
+    new Map();
 
-    console.log(
-        `Использую общий кэш (${allCache.length})`
-    );
-
-    if (rank) {
-
-        allCards.push(
-            ...allCache.filter(
-                card =>
-                    (card.rank || '')
-                        .toLowerCase()
-                    === rank.toLowerCase()
-            )
-        );
-
-    } else {
-
-        allCards.push(
-            ...allCache
-        );
-    }
-}
-
-allKnownCards.forEach(card => {
+allCache.forEach(card => {
 
     savedMap.set(
         String(card.id),
         card
     );
+
 });
         let completed = 0;
 
@@ -544,6 +463,7 @@ const scanStartTime = Date.now();
 
             const cards =
                 [...doc.querySelectorAll('.anime-cards__item')];
+            physicalCardsCount += cards.length;
 
             cards.forEach(card => {
 
@@ -711,7 +631,7 @@ const sec =
 document.querySelector(
     '#animesss-percent'
 ).textContent =
-`${completed}/${allCards.length} (${percent}%)`;
+`${completed}/${physicalCardsCount} (${percent}%)`;
             const timeElement =
     document.querySelector('#animesss-time');
 
@@ -729,9 +649,40 @@ if (timeElement) {
         window.allCards = allCards;
         window.animesssResults = allCards;
 
-        localStorage.setItem(
-    `animesss_scan_${username}_${storageRank}`,
-    JSON.stringify(allCards)
+        const oldCache =
+    JSON.parse(
+        localStorage.getItem(
+            `animesss_scan_${username}_all`
+        ) || '[]'
+    );
+
+const mergedMap =
+    new Map();
+
+oldCache.forEach(card => {
+
+    mergedMap.set(
+        String(card.id),
+        card
+    );
+
+});
+
+allCards.forEach(card => {
+
+    mergedMap.set(
+        String(card.id),
+        card
+    );
+
+});
+
+const mergedCards =
+    [...mergedMap.values()];
+
+localStorage.setItem(
+    `animesss_scan_${username}_all`,
+    JSON.stringify(mergedCards)
 );
 
         document.querySelector('#animesss-status')
@@ -1355,6 +1306,429 @@ if (firstTab) {
 );
 
 }
-    createUI();
+    function getRankWeight(rank) {
 
+    const weights = {
+    SSS:5000,
+    ASS:4000,
+    S:3000,
+    A:1200,
+    B:400,
+    C:120,
+    D:40,
+    E:0
+};
+
+    return weights[rank] || 0;
+}
+
+    function clearPackFrames() {
+
+    document
+        .querySelectorAll('.animesss-pack-frame')
+        .forEach(frame => {
+
+            const card = frame.cardRef;
+
+            if (card) {
+
+                card.packFrame = null;
+                card.packLabelElement = null;
+                card.packStatsElement = null;
+
+                frame.parentNode.insertBefore(
+                    card,
+                    frame
+                );
+            }
+
+            frame.remove();
+        });
+}
+
+async function initPackAnalyzer() {
+
+
+
+    if (window.packAnalyzerBusy) {
+    return;
+}
+
+window.packAnalyzerBusy = true;
+
+    const cards =
+        [...document.querySelectorAll(
+            '.lootbox__card'
+        )];
+
+
+    const packSignature =
+    cards
+    .map(card => card.dataset.id)
+    .join('-');
+
+
+
+if (
+    window.lastPackSignature ===
+    packSignature
+) {
+    window.packAnalyzerBusy = false;
+    return;
+}
+
+    const isFirstPack =
+    !window.lastPackSignature;
+
+if (!isFirstPack) {
+    clearPackFrames();
+}
+
+window.lastPackSignature =
+    packSignature;
+
+        await sleep(1000);
+
+    if (cards.length !== 3) {
+    window.packAnalyzerBusy = false;
+    return;
+}
+
+    for (const card of cards) {
+
+        const id =
+            card.dataset.id;
+        const rank =
+    (card.dataset.rank || '')
+    .toUpperCase();
+
+        const html =
+            await fetchWithRetry(
+                `/cards/users/?id=${id}`
+            );
+
+
+
+        const doc =
+            new DOMParser()
+            .parseFromString(
+                html,
+                'text/html'
+            );
+
+        const total =
+            Number(
+                doc.querySelector(
+                    '#owners-count'
+                )?.textContent || 0
+            );
+
+        const wanted =
+            Number(
+                doc.querySelector(
+                    '#owners-need'
+                )?.textContent || 0
+            );
+
+        const trade =
+            Number(
+                doc.querySelector(
+                    '#owners-trade'
+                )?.textContent || 0
+            );
+
+
+
+        card.packStats = {
+    rank,
+    wanted,
+    trade,
+    total
+
+};
+        card.packStats.score =
+    getRankWeight(rank) +
+    wanted;
+        console.log(
+    rank,
+    wanted,
+    trade,
+    total
+);
+
+        const stats =
+            document.createElement('div');
+        const label =
+    document.createElement('div');
+
+label.className =
+    'animesss-pack-label';
+
+label.textContent =
+    card.packLabel || '';
+
+        stats.className =
+    'animesss-pack-stats';
+
+        stats.innerHTML = `
+            ❤️ ${wanted}
+            &nbsp;&nbsp;
+            🔄 ${trade}
+            &nbsp;&nbsp;
+            👥 ${total}
+        `;
+
+        stats.style.cssText = `
+    width:100%;
+
+    text-align:center;
+
+    font-size:18px;
+    font-weight:600;
+
+    color:black;
+
+    padding:3px;
+    box-sizing:border-box;
+`;
+
+        stats.style.opacity = '0';
+stats.style.transition =
+    'opacity .3s ease';
+
+        card.style.position =
+            'relative';
+        card.style.width = '240px';
+
+label.style.cssText = `
+    width:100%;
+
+    text-align:center;
+
+    font-size:16px;
+    font-weight:700;
+
+    color:black;
+
+    padding:2px;
+    box-sizing:border-box;
+`;
+
+        label.style.opacity = '0';
+label.style.transition =
+    'opacity .3s ease';
+
+
+
+if (card.packFrame) {
+
+    card.packFrame.remove();
+
+    card.packFrame = null;
+    card.packLabelElement = null;
+    card.packStatsElement = null;
+}
+
+
+const frame =
+    document.createElement('div');
+
+frame.className =
+    'animesss-pack-frame';
+        card.packLabelElement = label;
+card.packStatsElement = stats;
+
+card.packFrame = frame;
+
+frame.style.cssText = `
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+
+    padding:4px;
+
+    border-radius:12px;
+
+    opacity:0;
+    transform:scale(0.8);
+
+    transition:
+        opacity .35s ease,
+        transform .35s ease;
+`;
+
+frame.cardRef = card;
+
+card.parentNode.insertBefore(
+    frame,
+    card
+);
+
+frame.appendChild(label);
+frame.appendChild(card);
+frame.appendChild(stats);
+
+        setTimeout(() => {
+
+    frame.style.opacity = '1';
+    frame.style.transform =
+        'scale(1)';
+
+}, 50);
+
+
+
+    }
+    const sortedCards =
+    [...cards]
+    .filter(
+        card => card.packStats
+    )
+    .sort(
+        (a, b) =>
+            b.packStats.score -
+            a.packStats.score
+    );
+    sortedCards[0].packLabel =
+    '👑 ЛУЧШИЙ';
+
+sortedCards[1].packLabel =
+    '👍 НОРМ';
+
+sortedCards[2].packLabel =
+    '📦 СЛАБЕЕ';
+   sortedCards[0]
+    .packLabelElement
+    .textContent =
+        '👑 BEST';
+
+sortedCards[1]
+    .packLabelElement
+    .textContent =
+        '👍 NORMAL';
+
+sortedCards[2]
+    .packLabelElement
+    .textContent =
+        '📦 TRASH';
+
+
+    sortedCards[0]
+    .packFrame
+    .style.background =
+        '#d4af37';
+
+sortedCards[1]
+    .packFrame
+    .style.background =
+        '#c0c0c0';
+
+sortedCards[2]
+    .packFrame
+    .style.background =
+        '#cd7f32';
+
+
+
+    sortedCards[0]
+    .packLabelElement
+    .style.color =
+        'black';
+
+sortedCards[1]
+    .packLabelElement
+    .style.color =
+        'black';
+
+sortedCards[2]
+    .packLabelElement
+    .style.color =
+        'black';
+
+    setTimeout(() => {
+
+    sortedCards.forEach(card => {
+
+        card.packLabelElement.style.opacity = '1';
+        card.packStatsElement.style.opacity = '1';
+
+    });
+
+}, 350);
+
+    window.packAnalyzerBusy = false;
+}
+
+if (
+    location.pathname.startsWith(
+        '/user/cards'
+    )
+) {
+    createUI();
+}
+function observePackChanges() {
+
+    if (
+        !location.pathname.startsWith(
+            '/cards/pack'
+        )
+    ) {
+        return;
+    }
+
+    const observer =
+    new MutationObserver(() => {
+
+        clearTimeout(
+            window.packAnalyzerTimer
+        );
+
+
+
+            window.packAnalyzerTimer =
+    setTimeout(() => {
+
+                console.log('OBSERVER FIRED');
+
+        const cards =
+            document.querySelectorAll(
+                '.lootbox__card'
+            );
+
+        if (cards.length !== 3) {
+    return;
+}
+
+const packSignature =
+    [...cards]
+    .map(card => card.dataset.id || '')
+    .join('-');
+
+if (
+    packSignature &&
+    packSignature !== '--' &&
+    packSignature !==
+    window.lastObservedPack
+) {
+
+    window.lastObservedPack =
+        packSignature;
+
+    initPackAnalyzer();
+}
+
+    }, 500);
+
+
+        });
+
+    observer.observe(
+        document.body,
+        {
+            childList: true,
+            subtree: true
+        }
+    );
+}
+observePackChanges();
 })();
