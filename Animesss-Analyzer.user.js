@@ -1,11 +1,14 @@
 // ==UserScript==
 // @name         Animesss Analyzer
 // @namespace    https://github.com/Punkalone
-// @version      4
+// @version      4.1
 // @description  Animesss card analyzer
 // @author       Punkalone
 // @match        *://animesss.com/*
+// @match        *://*.animesss.com/*
+// @match        *://*/*
 // @grant        none
+// @all-frames   true
 
 // @updateURL    https://raw.githubusercontent.com/Punkalone/Animesss-Analyzer/main/Animesss-Analyzer.user.js
 // @downloadURL  https://raw.githubusercontent.com/Punkalone/Animesss-Analyzer/main/Animesss-Analyzer.user.js
@@ -13,6 +16,388 @@
 
 (function () {
     'use strict';
+
+    const ANIMESSS_ANALYZER_IS_TOP = window.top === window;
+    const ANIMESSS_ANALYZER_IS_ANIMESSS = /(^|\.)animesss\.com$/i.test(location.hostname);
+
+    if (!(ANIMESSS_ANALYZER_IS_ANIMESSS && ANIMESSS_ANALYZER_IS_TOP)) {
+        animesssAnalyzerRunFullscreenFrame();
+        return;
+    }
+
+    animesssAnalyzerRunFullscreenParent();
+
+    function animesssAnalyzerRunFullscreenParent() {
+        const VIDEO_LIFT_VH = 1.2;
+        const MSG_TOGGLE_FS = 'AMS_ANALYZER_TOGGLE_CONTAINER_FULLSCREEN';
+        const MSG_ENTER_FS = 'AMS_ANALYZER_ENTER_CONTAINER_FULLSCREEN';
+        const PLAYER_SELECTOR = '#player_kodik';
+        const CARD_SELECTOR = '.card-notification';
+        const MODAL_SELECTOR = '.ui-dialog[aria-describedby="card-modal"]';
+        const STYLE_ID = 'animesss-analyzer-fullscreen-style';
+        const ORIGINAL_PARENT_KEY = '__animesssAnalyzerOriginalParent';
+        const ORIGINAL_NEXT_KEY = '__animesssAnalyzerOriginalNext';
+
+        const onReady = (callback) => {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', callback, { once: true });
+            } else {
+                callback();
+            }
+        };
+
+        onReady(() => {
+            injectParentFullscreenStyle();
+            patchParentFullscreenRequests();
+            setupParentFullscreenLayer();
+
+            setInterval(setupParentFullscreenLayer, 700);
+            document.addEventListener('fullscreenchange', setupParentFullscreenLayer, true);
+
+            new MutationObserver(setupParentFullscreenLayer).observe(document.body || document.documentElement, {
+                childList: true,
+                subtree: true
+            });
+
+            window.addEventListener('message', async (event) => {
+                if (!event.data) return;
+
+                const player = document.querySelector(PLAYER_SELECTOR);
+                if (!player) return;
+
+                if (event.data.type === MSG_TOGGLE_FS) {
+                    await togglePlayerFullscreen(player);
+                }
+
+                if (event.data.type === MSG_ENTER_FS) {
+                    await enterPlayerFullscreen(player);
+                }
+
+                setTimeout(setupParentFullscreenLayer, 0);
+                setTimeout(setupParentFullscreenLayer, 250);
+            });
+        });
+
+        function setupParentFullscreenLayer() {
+            const player = document.querySelector(PLAYER_SELECTOR);
+            if (!player) return;
+
+            player.classList.add('animesss-analyzer-ruby-player');
+            player.style.setProperty('--animesss-analyzer-video-lift', `${VIDEO_LIFT_VH}vh`);
+
+            fixCard(player);
+            fixModal(player);
+        }
+
+        function patchParentFullscreenRequests() {
+            if (Element.prototype.__animesssAnalyzerParentFsPatched) return;
+            Element.prototype.__animesssAnalyzerParentFsPatched = true;
+
+            const nativeRequest = Element.prototype.requestFullscreen;
+            if (!nativeRequest) return;
+
+            Element.prototype.requestFullscreen = function (...args) {
+                const player = document.querySelector(PLAYER_SELECTOR);
+
+                if (player && this !== player && player.contains(this)) {
+                    return nativeRequest.apply(player, args);
+                }
+
+                return nativeRequest.apply(this, args);
+            };
+        }
+
+        async function togglePlayerFullscreen(player) {
+            try {
+                if (document.fullscreenElement === player) {
+                    await document.exitFullscreen();
+                } else {
+                    await enterPlayerFullscreen(player);
+                }
+            } catch (error) {
+                console.warn('[Animesss Analyzer FS] fullscreen toggle failed:', error);
+            }
+        }
+
+        async function enterPlayerFullscreen(player) {
+            try {
+                if (document.fullscreenElement === player) return;
+                await player.requestFullscreen();
+            } catch (error) {
+                console.warn('[Animesss Analyzer FS] fullscreen open failed:', error);
+            }
+        }
+
+        function fixCard(player) {
+            const card = player.querySelector(CARD_SELECTOR);
+            if (!card) return;
+            card.classList.add('animesss-analyzer-ruby-card');
+        }
+
+        function fixModal(player) {
+            const isFullscreen = document.fullscreenElement === player;
+
+            document.querySelectorAll(MODAL_SELECTOR).forEach((modal) => {
+                if (!(modal instanceof HTMLElement)) return;
+
+                remember(modal);
+                modal.classList.add('animesss-analyzer-ruby-modal');
+
+                if (isFullscreen) {
+                    if (!player.contains(modal)) player.appendChild(modal);
+                } else {
+                    restore(modal);
+                }
+            });
+        }
+
+        function remember(el) {
+            if (el[ORIGINAL_PARENT_KEY]) return;
+            el[ORIGINAL_PARENT_KEY] = el.parentNode;
+            el[ORIGINAL_NEXT_KEY] = el.nextSibling;
+        }
+
+        function restore(el) {
+            const parent = el[ORIGINAL_PARENT_KEY];
+            const next = el[ORIGINAL_NEXT_KEY];
+
+            if (!parent || !document.contains(parent) || el.parentNode === parent) return;
+
+            if (next && document.contains(next)) {
+                parent.insertBefore(el, next);
+            } else {
+                parent.appendChild(el);
+            }
+        }
+
+        function injectParentFullscreenStyle() {
+            if (document.getElementById(STYLE_ID)) return;
+
+            const style = document.createElement('style');
+            style.id = STYLE_ID;
+            style.textContent = `
+                #player_kodik.animesss-analyzer-ruby-player {
+                    position: relative !important;
+                    background: #000 !important;
+                    overflow: hidden !important;
+                }
+
+                #player_kodik:fullscreen {
+                    position: fixed !important;
+                    inset: 0 !important;
+                    width: 100vw !important;
+                    height: 100vh !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background: #000 !important;
+                    overflow: hidden !important;
+                }
+
+                #player_kodik:fullscreen > div:not(.card-notification):not(.ui-dialog) {
+                    position: absolute !important;
+                    left: 0 !important;
+                    top: calc(var(--animesss-analyzer-video-lift, 1.2vh) * -1) !important;
+                    width: 100% !important;
+                    height: calc(100% + var(--animesss-analyzer-video-lift, 1.2vh)) !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background: #000 !important;
+                    overflow: hidden !important;
+                }
+
+                #player_kodik:fullscreen iframe {
+                    position: absolute !important;
+                    inset: 0 !important;
+                    width: 100% !important;
+                    height: 100% !important;
+                    border: 0 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    z-index: 1 !important;
+                }
+
+                #player_kodik .animesss-analyzer-ruby-card,
+                #player_kodik:fullscreen .animesss-analyzer-ruby-card {
+                    position: fixed !important;
+                    right: clamp(16px, 1.4vw, 28px) !important;
+                    bottom: clamp(76px, 8vh, 110px) !important;
+                    width: clamp(58px, 3.8vw, 70px) !important;
+                    height: clamp(87px, 5.7vw, 105px) !important;
+                    z-index: 2147483647 !important;
+                    display: block !important;
+                    visibility: visible !important;
+                    opacity: 1 !important;
+                    pointer-events: auto !important;
+                    cursor: pointer !important;
+                }
+
+                #player_kodik:fullscreen .animesss-analyzer-ruby-modal {
+                    position: fixed !important;
+                    left: 50% !important;
+                    top: 50% !important;
+                    transform: translate(-50%, -50%) !important;
+                    width: min(500px, calc(100vw - 32px)) !important;
+                    max-width: min(500px, calc(100vw - 32px)) !important;
+                    max-height: calc(100vh - 48px) !important;
+                    height: auto !important;
+                    z-index: 2147483647 !important;
+                    display: block !important;
+                    visibility: visible !important;
+                    opacity: 1 !important;
+                    pointer-events: auto !important;
+                }
+
+                #player_kodik:fullscreen .animesss-analyzer-ruby-modal #card-modal {
+                    max-height: calc(100vh - 110px) !important;
+                    height: auto !important;
+                    overflow: auto !important;
+                }
+            `;
+
+            document.documentElement.appendChild(style);
+        }
+    }
+
+    function animesssAnalyzerRunFullscreenFrame() {
+        if (window.top === window) return;
+
+        const MSG_TOGGLE_FS = 'AMS_ANALYZER_TOGGLE_CONTAINER_FULLSCREEN';
+        const MSG_ENTER_FS = 'AMS_ANALYZER_ENTER_CONTAINER_FULLSCREEN';
+        const KODIK_FS_SELECTOR = '.fp-x-fullscreen, #footer > div.fp-controls > a';
+        const STYLE_ID = 'animesss-analyzer-frame-fullscreen-style';
+
+        patchFrameFullscreenRequests();
+
+        const onReady = (callback) => {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', callback, { once: true });
+            } else {
+                callback();
+            }
+        };
+
+        onReady(() => {
+            injectFrameStyle();
+            interceptKodikControls();
+
+            setInterval(interceptKodikControls, 500);
+
+            new MutationObserver(interceptKodikControls).observe(document.documentElement, {
+                childList: true,
+                subtree: true
+            });
+        });
+
+        document.addEventListener('keydown', interceptFullscreenHotkeys, true);
+        document.addEventListener('dblclick', interceptFullscreenGesture, true);
+
+        function patchFrameFullscreenRequests() {
+            if (Element.prototype.__animesssAnalyzerFrameFsPatched) return;
+            Element.prototype.__animesssAnalyzerFrameFsPatched = true;
+
+            const fakeFullscreen = function () {
+                window.parent.postMessage({ type: MSG_ENTER_FS }, '*');
+                return Promise.resolve();
+            };
+
+            Element.prototype.requestFullscreen = fakeFullscreen;
+
+            if (Element.prototype.webkitRequestFullscreen) Element.prototype.webkitRequestFullscreen = fakeFullscreen;
+            if (Element.prototype.mozRequestFullScreen) Element.prototype.mozRequestFullScreen = fakeFullscreen;
+            if (Element.prototype.msRequestFullscreen) Element.prototype.msRequestFullscreen = fakeFullscreen;
+        }
+
+        function interceptFullscreenHotkeys(event) {
+            const key = String(event.key || '').toLowerCase();
+
+            if (key === 'f') {
+                stopOnly(event);
+                window.parent.postMessage({ type: MSG_TOGGLE_FS }, '*');
+            }
+        }
+
+        function interceptFullscreenGesture(event) {
+            stopOnly(event);
+            window.parent.postMessage({ type: MSG_TOGGLE_FS }, '*');
+        }
+
+        function interceptKodikControls() {
+            const buttons = document.querySelectorAll(KODIK_FS_SELECTOR);
+
+            for (const button of buttons) {
+                if (!(button instanceof HTMLElement)) continue;
+
+                button.classList.add('animesss-analyzer-ruby-native-fs-button');
+                button.title = 'Fullscreen with cards';
+
+                if (button.dataset.animesssAnalyzerIntercepted === '1') continue;
+                button.dataset.animesssAnalyzerIntercepted = '1';
+                button.tabIndex = -1;
+
+                button.addEventListener('pointerdown', stopOnly, true);
+                button.addEventListener('mousedown', stopOnly, true);
+                button.addEventListener('mouseup', stopOnly, true);
+                button.addEventListener('keydown', stopOnly, true);
+
+                button.addEventListener('click', (event) => {
+                    stopOnly(event);
+                    button.blur();
+
+                    window.parent.postMessage({ type: MSG_TOGGLE_FS }, '*');
+
+                    setTimeout(() => button.blur(), 0);
+                }, true);
+            }
+        }
+
+        function stopOnly(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation?.();
+        }
+
+        function injectFrameStyle() {
+            if (document.getElementById(STYLE_ID)) return;
+
+            const style = document.createElement('style');
+            style.id = STYLE_ID;
+            style.textContent = `
+                @keyframes animesssAnalyzerRubyFlow {
+                    0% { background-position: 0% 50%; }
+                    50% { background-position: 100% 50%; }
+                    100% { background-position: 0% 50%; }
+                }
+
+                .animesss-analyzer-ruby-native-fs-button {
+                    background: linear-gradient(135deg, #360513, #8d173f, #e0477f, #9f1b4a, #2a0410) !important;
+                    background-size: 260% 260% !important;
+                    animation: animesssAnalyzerRubyFlow 3.2s ease infinite !important;
+                    box-shadow:
+                        0 0 0 1px rgba(255,210,226,.28) inset,
+                        0 0 16px rgba(224,71,127,.75) !important;
+                    outline: none !important;
+                    user-select: none !important;
+                    -webkit-tap-highlight-color: transparent !important;
+                }
+
+                .animesss-analyzer-ruby-native-fs-button:hover {
+                    box-shadow:
+                        0 0 0 1px rgba(255,230,238,.52) inset,
+                        0 0 24px rgba(255,77,145,.95) !important;
+                    filter: brightness(1.12) !important;
+                }
+
+                .animesss-analyzer-ruby-native-fs-button svg,
+                .animesss-analyzer-ruby-native-fs-button .fp-fill,
+                .animesss-analyzer-ruby-native-fs-button svg path {
+                    fill: #fff6fa !important;
+                }
+            `;
+
+            document.documentElement.appendChild(style);
+        }
+    }
+
 
     const fontLink = document.createElement('link');
     fontLink.rel = 'stylesheet';
@@ -1242,7 +1627,7 @@
     }
 
     function showIntroNotification(next = showUpdateNotification) {
-        const key = 'animesss_intro_v4_shown';
+        const key = 'animesss_intro_v4_1_shown';
         if (localStorage.getItem(key)) { next(); return; }
         if (!document.body) { setTimeout(() => showIntroNotification(next), 1000); return; }
 
@@ -1260,6 +1645,7 @@
                         <li style="margin-bottom: 10px;">◆ Показывает лучшие, редкие, востребованные и худшие карты отдельными вкладками.</li>
                         <li style="margin-bottom: 10px;">◆ Подсвечивает новые карты и умеет обновлять статистику при наведении.</li>
                         <li style="margin-bottom: 10px;">◆ Помогает оценивать выбор в паках и показывает BEST/NORMAL/TRASH.</li>
+                        <li style="margin-bottom: 10px;">◆ &#1055;&#1086;&#1079;&#1074;&#1086;&#1083;&#1103;&#1077;&#1090; &#1087;&#1086;&#1083;&#1091;&#1095;&#1072;&#1090;&#1100; &#1074;&#1099;&#1087;&#1072;&#1076;&#1072;&#1102;&#1097;&#1080;&#1077; &#1082;&#1072;&#1088;&#1090;&#1086;&#1095;&#1082;&#1080; &#1087;&#1088;&#1103;&#1084;&#1086; &#1074; &#1087;&#1086;&#1083;&#1085;&#1086;&#1101;&#1082;&#1088;&#1072;&#1085;&#1085;&#1086;&#1084; &#1088;&#1077;&#1078;&#1080;&#1084;&#1077; Kodik — &#1073;&#1077;&#1079; &#1074;&#1099;&#1093;&#1086;&#1076;&#1072; &#1080;&#1079; &#1087;&#1088;&#1086;&#1089;&#1084;&#1086;&#1090;&#1088;&#1072;.</li>
                     </ul>
                     <p style="margin:18px 0 0; color:var(--an-ink); font-weight:700; text-align:center;">
                         Создатель:
@@ -1279,8 +1665,8 @@
     }
 
     function showUpdateNotification() {
-        const ver = "4";
-        const key = `animesss_update_v${ver}_shown`;
+        const ver = "4.1";
+        const key = `animesss_update_v${ver}_fullscreen_cards_shown`;
         if (localStorage.getItem(key)) return;
         if (!document.body) { setTimeout(showUpdateNotification, 1000); return; }
 
@@ -1290,13 +1676,20 @@
         modal.innerHTML = `
             <div style="background: var(--an-panel); border: 1px solid var(--an-line); border-top: 2px solid var(--an-red); border-radius: 20px; padding: 40px; max-width: 600px; color: var(--an-ink); box-shadow: 0 24px 70px rgba(0,0,0,.6), 0 0 40px rgba(214,48,74,.15); animation: animesssCardAppear 0.5s ease;">
                 <div style="font-family:var(--an-body); font-weight:700; font-size:11px; letter-spacing:2px; color:var(--an-red); text-transform:uppercase; text-align:center; margin-bottom:10px;">◆ Animesss Analyzer · v${ver}</div>
-                <div class="animesss-shimmer-title" style="font-family:var(--an-display); font-size: 26px; font-weight: 800; margin-bottom: 22px; text-align: center;">Рубиновое издание</div>
-                <div style="font-size: 15.5px; line-height: 1.7; margin-bottom: 30px; color: var(--an-ink-dim);">
-                    <ul style="list-style: none; padding: 0;">
-                        <li style="margin-bottom: 11px;">✨ <b style="color:var(--an-ink);">Обновлённый дизайн и свежие анимации</b> — интерфейс стал живее, аккуратнее и приятнее в использовании.</li>
-                        <li style="margin-bottom: 11px;">⚡ <b style="color:var(--an-ink);">Анализ стал быстрее</b> — задержка между запросами снижена с 700мс до 400мс.</li>
-                        <li style="margin-bottom: 11px;">🎯 <b style="color:var(--an-ink);">Точнее выбор BEST/NORMAL/TRASH в паках</b> — ранг больше не перебивает разницу в желающих (❤️), формула откалибрована на реальных выборах.</li>
-                    </ul>
+                <div class="animesss-shimmer-title" style="font-family:var(--an-display); font-size: 31px; font-weight: 800; margin-bottom: 16px; text-align: center;">&#1055;&#1086;&#1083;&#1085;&#1086;&#1101;&#1082;&#1088;&#1072;&#1085;&#1085;&#1072;&#1103; &#1087;&#1086;&#1073;&#1077;&#1076;&#1072;</div>
+                <div style="height:78px; margin:0 auto 22px; max-width:360px; position:relative; overflow:hidden; border-radius:18px; background:radial-gradient(circle at 50% 50%, rgba(255,90,114,.32), rgba(214,48,74,.12) 32%, transparent 68%); box-shadow:0 0 34px rgba(214,48,74,.28) inset;">
+                    <span style="position:absolute; left:48%; top:50%; width:5px; height:5px; border-radius:50%; background:var(--an-red-bright); box-shadow:0 -28px 0 rgba(255,90,114,.8), 24px -16px 0 rgba(232,165,152,.8), 30px 12px 0 rgba(255,90,114,.75), 8px 30px 0 rgba(214,48,74,.85), -22px 22px 0 rgba(232,165,152,.75), -32px -8px 0 rgba(255,90,114,.7), -8px -34px 0 rgba(214,48,74,.9); transform:scale(1.35);"></span>
+                    <span style="position:absolute; left:50%; top:50%; width:130px; height:1px; background:linear-gradient(90deg, transparent, rgba(255,90,114,.75), transparent); transform:translate(-50%,-50%) rotate(0deg); box-shadow:0 0 16px rgba(255,90,114,.45);"></span>
+                    <span style="position:absolute; left:50%; top:50%; width:130px; height:1px; background:linear-gradient(90deg, transparent, rgba(255,90,114,.75), transparent); transform:translate(-50%,-50%) rotate(45deg); box-shadow:0 0 16px rgba(255,90,114,.45);"></span>
+                    <span style="position:absolute; left:50%; top:50%; width:130px; height:1px; background:linear-gradient(90deg, transparent, rgba(255,90,114,.75), transparent); transform:translate(-50%,-50%) rotate(90deg); box-shadow:0 0 16px rgba(255,90,114,.45);"></span>
+                    <span style="position:absolute; left:50%; top:50%; width:130px; height:1px; background:linear-gradient(90deg, transparent, rgba(255,90,114,.75), transparent); transform:translate(-50%,-50%) rotate(135deg); box-shadow:0 0 16px rgba(255,90,114,.45);"></span>
+                </div>
+                <div style="font-size: 15.5px; line-height: 1.75; margin-bottom: 30px; color: var(--an-ink-dim);">
+                    <div style="padding:18px 18px; border-radius:16px; background:linear-gradient(135deg, rgba(214,48,74,.2), rgba(255,90,114,.1)); border:1px solid rgba(255,90,114,.35); box-shadow:0 0 30px rgba(214,48,74,.24);">
+                        <div style="color:var(--an-red-bright); font-family:var(--an-display); font-weight:800; font-size:18px; margin-bottom:8px;">&#1042;&#1099; &#1076;&#1086;&#1083;&#1075;&#1086; &#1101;&#1090;&#1086;&#1075;&#1086; &#1078;&#1076;&#1072;&#1083;&#1080;, &#1080; &#1091; &#1084;&#1077;&#1085;&#1103; &#1085;&#1072;&#1082;&#1086;&#1085;&#1077;&#1094;-&#1090;&#1086; &#1087;&#1086;&#1083;&#1091;&#1095;&#1080;&#1083;&#1086;&#1089;&#1100;!</div>
+                        <div style="color:var(--an-ink); font-weight:700;">&#1058;&#1077;&#1087;&#1077;&#1088;&#1100; &#1074;&#1099;&#1087;&#1072;&#1076;&#1072;&#1102;&#1097;&#1080;&#1077; &#1082;&#1072;&#1088;&#1090;&#1086;&#1095;&#1082;&#1080; &#1084;&#1086;&#1078;&#1085;&#1086; &#1079;&#1072;&#1073;&#1080;&#1088;&#1072;&#1090;&#1100; &#1087;&#1088;&#1103;&#1084;&#1086; &#1074; &#1087;&#1086;&#1083;&#1085;&#1086;&#1101;&#1082;&#1088;&#1072;&#1085;&#1085;&#1086;&#1084; &#1088;&#1077;&#1078;&#1080;&#1084;&#1077;.</div>
+                        <div style="margin-top:8px;">&#1041;&#1086;&#1083;&#1100;&#1096;&#1077; &#1085;&#1077; &#1085;&#1091;&#1078;&#1085;&#1086; &#1074;&#1099;&#1093;&#1086;&#1076;&#1080;&#1090;&#1100; &#1080;&#1079; &#1087;&#1088;&#1086;&#1089;&#1084;&#1086;&#1090;&#1088;&#1072;, &#1095;&#1090;&#1086;&#1073;&#1099; &#1087;&#1086;&#1076;&#1085;&#1103;&#1090;&#1100; &#1085;&#1072;&#1075;&#1088;&#1072;&#1076;&#1091;.</div>
+                    </div>
                 </div>
                 <button id="animesss-upd-close" style="width: 100%; padding: 15px; border: none; border-radius: 12px; background: linear-gradient(135deg, var(--an-red), var(--an-red-bright)); color: #fff5f6; font-family:var(--an-body); font-weight: 700; font-size: 16px; cursor: pointer; transition: transform .2s, box-shadow .2s;"
                         onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 10px 24px rgba(214,48,74,.35)';"
