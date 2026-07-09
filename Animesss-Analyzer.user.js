@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Animesss Analyzer
 // @namespace    https://github.com/Punkalone
-// @version      4.1
+// @version      4.2
 // @description  Animesss card analyzer
 // @author       Punkalone
 // @match        *://animesss.com/*
@@ -33,7 +33,7 @@
         const MSG_ENTER_FS = 'AMS_ANALYZER_ENTER_CONTAINER_FULLSCREEN';
         const PLAYER_SELECTOR = '#player_kodik';
         const CARD_SELECTOR = '.card-notification';
-        const MODAL_SELECTOR = '.ui-dialog[aria-describedby="card-modal"]';
+        const MODAL_SELECTOR = '.ui-dialog[aria-describedby="card-modal"], .ui-dialog[aria-describedby="trade-card-modal"]';
         const STYLE_ID = 'animesss-analyzer-fullscreen-style';
         const ORIGINAL_PARENT_KEY = '__animesssAnalyzerOriginalParent';
         const ORIGINAL_NEXT_KEY = '__animesssAnalyzerOriginalNext';
@@ -247,7 +247,8 @@
                     pointer-events: auto !important;
                 }
 
-                #player_kodik:fullscreen .animesss-analyzer-ruby-modal #card-modal {
+                #player_kodik:fullscreen .animesss-analyzer-ruby-modal #card-modal,
+                #player_kodik:fullscreen .animesss-analyzer-ruby-modal #trade-card-modal {
                     max-height: calc(100vh - 110px) !important;
                     height: auto !important;
                     overflow: auto !important;
@@ -406,7 +407,7 @@
 
     const style = document.createElement('style');
     style.textContent = `
-        #animesss-btn, #animesss-progress-box, #animesss-results, #animesss-update-notif, #animesss-intro-notif {
+        #animesss-btn, #animesss-progress-box, #animesss-results, #animesss-update-notif, #animesss-intro-notif, #animesss-trade-analysis {
             --an-void: #0a0a0d;
             --an-panel: #131317;
             --an-panel-raised: #1c1c22;
@@ -761,6 +762,329 @@
             height: 12px;
             background: var(--an-line);
         }
+        #animesss-trade-analysis {
+            width: 100%;
+            height: 100%;
+            max-width: calc(100vw - 24px);
+            max-height: 100%;
+            box-sizing: border-box;
+            background: linear-gradient(160deg, rgba(28,28,34,.98), rgba(12,12,16,.98));
+            border: 1px solid rgba(255,90,114,.28);
+            border-top: 2px solid var(--an-red);
+            border-radius: 14px 0 0 14px;
+            padding: 14px;
+            color: var(--an-ink);
+            box-shadow: 0 16px 45px rgba(0,0,0,.42), 0 0 30px rgba(214,48,74,.16);
+            overflow-x: hidden;
+            overflow-y: auto;
+            position: relative;
+            animation: none;
+            opacity: 1;
+            visibility: visible;
+            transform: none;
+            clip-path: inset(0);
+            transition: clip-path .34s cubic-bezier(.22,.75,.25,1);
+        }
+        #animesss-trade-shell {
+            position: absolute;
+            top: 0;
+            right: 100%;
+            width: 480px;
+            height: 100%;
+            z-index: -1;
+            pointer-events: auto;
+            transform: translateX(0);
+            transition: transform .34s cubic-bezier(.22, .75, .25, 1);
+        }
+        #animesss-trade-shell.animesss-trade-collapsed {
+            pointer-events: none;
+            transform: translateX(100%);
+        }
+        #animesss-trade-shell.animesss-trade-collapsed::after {
+            opacity: 0;
+        }
+        #animesss-trade-shell.animesss-trade-collapsed #animesss-trade-analysis {
+            opacity: 1;
+            visibility: visible;
+            transform: none;
+            clip-path: inset(0 100% 0 0);
+            pointer-events: none;
+        }
+        #animesss-trade-shell.animesss-trade-shell-right.animesss-trade-collapsed #animesss-trade-analysis {
+            transform: none;
+            clip-path: inset(0 0 0 100%);
+        }
+        .animesss-trade-toggle {
+            position: absolute;
+            top: 50%;
+            left: -26px;
+            right: auto;
+            width: 26px;
+            height: 42px;
+            border-radius: 9px;
+            border: 1px solid rgba(255,90,114,.55);
+            background: linear-gradient(160deg, rgba(92,22,38,.98), rgba(214,48,74,.92));
+            color: #fff5f6;
+            font-family: var(--an-mono);
+            font-size: 17px;
+            font-weight: 900;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            z-index: 5;
+            box-shadow: 0 0 18px rgba(214,48,74,.38), 0 12px 24px rgba(0,0,0,.35);
+            transform: translateY(-50%);
+            transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
+            pointer-events: auto;
+        }
+        .animesss-trade-toggle:hover {
+            filter: brightness(1.12);
+            box-shadow: 0 0 24px rgba(255,90,114,.55), 0 12px 24px rgba(0,0,0,.35);
+        }
+        .animesss-trade-toggle:active {
+            transform: translateY(-50%) scale(.96);
+        }
+        #animesss-trade-shell.animesss-trade-shell-right .animesss-trade-toggle {
+            left: auto;
+            right: -26px;
+        }
+        #animesss-trade-shell.animesss-trade-shell-right.animesss-trade-collapsed {
+            transform: translateX(-100%);
+        }
+        #animesss-trade-shell.animesss-trade-shell-right #animesss-trade-analysis {
+            border-radius: 0 14px 14px 0;
+        }
+        #animesss-trade-shell::after {
+            content: '';
+            display: none;
+            position: absolute;
+            right: -1px;
+            top: 0;
+            width: 1px;
+            height: 100%;
+            background: linear-gradient(180deg, rgba(255,90,114,.75), rgba(255,90,114,.18), rgba(255,90,114,.75));
+            box-shadow: 0 0 14px rgba(255,90,114,.35);
+        }
+        #animesss-trade-shell.animesss-trade-shell-right::after {
+            left: -1px;
+            right: auto;
+        }
+        #animesss-trade-shell.animesss-trade-shell-right {
+            left: 100%;
+            right: auto;
+        }
+        #animesss-trade-analysis::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(115deg, transparent 20%, rgba(255,255,255,.08) 46%, transparent 72%);
+            transform: translateX(-120%);
+            animation: animesssShimmer 3.8s ease-in-out infinite;
+            pointer-events: none;
+        }
+        .animesss-trade-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 1;
+        }
+        .animesss-trade-kicker {
+            font-family: var(--an-body);
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 1.8px;
+            text-transform: uppercase;
+            color: var(--an-red-bright);
+        }
+        .animesss-trade-verdict {
+            font-family: var(--an-display);
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--an-ink);
+            margin-top: 3px;
+        }
+        .animesss-trade-gauge {
+            --score: 50;
+            --needle-angle: -90deg;
+            width: min(310px, 100%);
+            height: 150px;
+            margin: -2px auto 12px;
+            position: relative;
+            z-index: 1;
+        }
+        .animesss-trade-arc-svg {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            width: 100%;
+            height: 126px;
+            overflow: visible;
+            filter: drop-shadow(0 0 10px rgba(214,48,74,.18));
+        }
+        .animesss-trade-arc-svg path {
+            fill: none;
+            stroke-width: 26;
+            stroke-linecap: butt;
+        }
+        .animesss-trade-needle {
+            position: absolute;
+            left: 50%;
+            bottom: 32px;
+            width: 38%;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, #f3f1ec 28%, var(--an-red-bright));
+            border-radius: 999px;
+            transform-origin: 0 50%;
+            transform: rotate(var(--needle-angle));
+            transition: transform 1s cubic-bezier(.22,1,.36,1);
+            box-shadow: 0 0 12px rgba(255,90,114,.7);
+        }
+        @keyframes animesssTradeNeedleTwitch {
+            0%, 100% { transform: rotate(var(--needle-angle)); }
+            35% { transform: rotate(calc(var(--needle-angle) - 1.4deg)); }
+            68% { transform: rotate(calc(var(--needle-angle) + 1.2deg)); }
+        }
+        #animesss-trade-analysis.animesss-trade-ready .animesss-trade-needle {
+            animation: animesssTradeNeedleTwitch 1.35s ease-in-out .65s infinite;
+        }
+        .animesss-trade-needle::after {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 50%;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--an-panel-raised);
+            border: 2px solid var(--an-red-bright);
+            transform: translateY(-50%);
+            box-shadow: 0 0 12px rgba(255,90,114,.55);
+        }
+        .animesss-trade-scale-labels {
+            position: absolute;
+            inset: 0;
+            font-family: var(--an-mono);
+            font-size: 8.5px;
+            font-weight: 800;
+            color: rgba(243,241,236,.84);
+            letter-spacing: .4px;
+            text-transform: uppercase;
+            pointer-events: none;
+        }
+        .animesss-trade-scale-labels span {
+            position: absolute;
+            padding: 3px 6px;
+            border-radius: 999px;
+            background: rgba(10,10,13,.78);
+            border: 1px solid rgba(255,255,255,.1);
+            text-shadow: 0 1px 2px rgba(0,0,0,.75);
+        }
+        .animesss-trade-scale-labels span:first-child {
+            left: 7%;
+            bottom: 8px;
+        }
+        .animesss-trade-scale-labels span:nth-child(2) {
+            left: 50%;
+            top: 44px;
+            transform: translateX(-50%);
+        }
+        .animesss-trade-scale-labels span:last-child {
+            right: 7%;
+            bottom: 8px;
+        }
+        .animesss-trade-columns {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            position: relative;
+            z-index: 1;
+        }
+        .animesss-trade-side {
+            background: rgba(10,10,13,.55);
+            border: 1px solid var(--an-line);
+            border-radius: 10px;
+            padding: 10px;
+            min-width: 0;
+        }
+        .animesss-trade-card-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+            gap: 8px;
+        }
+        .animesss-trade-side-title {
+            font-family: var(--an-body);
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--an-ink-dim);
+            text-transform: uppercase;
+            letter-spacing: .8px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,.07);
+        }
+        .animesss-trade-card-row {
+            display: grid;
+            grid-template-columns: 42px minmax(0, 1fr);
+            gap: 8px;
+            align-items: center;
+            padding: 8px;
+            border: 1px solid rgba(255,255,255,.07);
+            border-radius: 8px;
+            background: rgba(255,255,255,.025);
+            min-width: 0;
+        }
+        .animesss-trade-card-row img {
+            width: 42px;
+            aspect-ratio: 2/3;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,.14);
+        }
+        .animesss-trade-card-name {
+            font-family: var(--an-body);
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--an-ink);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .animesss-trade-card-stats {
+            margin-top: 4px;
+            display: grid;
+            grid-template-columns: repeat(4, max-content);
+            gap: 6px;
+            font-family: var(--an-mono);
+            font-size: 9.5px;
+            color: var(--an-ink-dim);
+            white-space: nowrap;
+            align-items: center;
+            overflow: hidden;
+        }
+        .animesss-trade-card-stats span {
+            display: inline-flex;
+            align-items: center;
+            line-height: 1;
+        }
+        .animesss-trade-loading {
+            font-family: var(--an-body);
+            font-size: 13px;
+            color: var(--an-ink-dim);
+            text-align: center;
+            padding: 18px 10px;
+            position: relative;
+            z-index: 1;
+        }
+        @media screen and (max-width: 560px) {
+            .animesss-trade-columns { grid-template-columns: 1fr; }
+            .animesss-trade-head { align-items: flex-start; flex-direction: column; }
+            #animesss-trade-analysis { width: calc(100vw - 24px); height: auto; max-height: none; border-radius: 14px; }
+            #animesss-trade-shell { position: relative; left: auto; right: auto; top: auto; width: 100%; height: auto; margin-bottom: 12px; }
+        }
         .animesss-empty-state {
             text-align: center;
             padding: 60px 20px;
@@ -773,6 +1097,27 @@
 
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const parser = new DOMParser();
+    const normalizeStatValue = value => {
+        const number = Number(value);
+        return Number.isFinite(number) && number >= 0 ? number : 0;
+    };
+    const hasCompleteStats = card => ['total', 'wanted', 'trade'].every(key => {
+        const value = Number(card?.[key]);
+        return Number.isFinite(value) && value >= 0;
+    });
+    const readStatValue = (doc, selector) => normalizeStatValue(doc.querySelector(selector)?.textContent);
+    const normalizeCardStats = card => {
+        const hadInvalidStats = ['total', 'wanted', 'trade'].some(key => {
+            const value = Number(card?.[key]);
+            return !Number.isFinite(value) || value < 0;
+        });
+        card.total = normalizeStatValue(card.total);
+        card.wanted = normalizeStatValue(card.wanted);
+        card.trade = normalizeStatValue(card.trade);
+        if (hadInvalidStats) delete card.lastUpdate;
+        return card;
+    };
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 
     async function fetchWithRetry(url, retries = 3) {
         for (let i = 1; i <= retries; i++) {
@@ -786,6 +1131,308 @@
                 await sleep(3000);
             }
         }
+    }
+
+    function extractCardIdFromHref(href) {
+        try {
+            return new URL(href, location.origin).searchParams.get('id');
+        } catch (e) {
+            return String(href || '').match(/[?&]id=(\d+)/)?.[1] || '';
+        }
+    }
+
+    function prettifyCardNameFromImage(src, fallback) {
+        const file = decodeURIComponent(String(src || '').split('/').pop() || '').replace(/\.[a-z0-9]+$/i, '');
+        const clean = file.replace(/-\d+(?:-\d+)?$/g, '').replace(/[-_]+/g, ' ').trim();
+        if (!clean) return fallback;
+        const readable = /[а-яё]/i.test(clean) ? clean : transliterateSlugToRussian(clean);
+        return readable.replace(/(^|\s)\S/g, letter => letter.toUpperCase());
+    }
+
+    function transliterateSlugToRussian(text) {
+        const words = String(text || '').toLowerCase().split(/\s+/).filter(Boolean);
+        const overrides = {
+            zheltye: 'желтые',
+            zheltyj: 'желтый',
+            zheltaya: 'желтая',
+            zheltoe: 'желтое',
+            kolokolchiki: 'колокольчики',
+            para: 'пара',
+            rejd: 'рейд'
+        };
+        const tokens = ['shch', 'yo', 'yu', 'ya', 'zh', 'kh', 'ts', 'ch', 'sh', 'sch', 'ye', 'iy', 'y', 'a', 'b', 'v', 'g', 'd', 'e', 'z', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'f', 'h', 'c'];
+        const map = {
+            shch: 'щ', sch: 'щ', yo: 'ё', yu: 'ю', ya: 'я', zh: 'ж', kh: 'х', ts: 'ц', ch: 'ч', sh: 'ш', ye: 'е', iy: 'ий',
+            y: 'ы', a: 'а', b: 'б', v: 'в', g: 'г', d: 'д', e: 'е', z: 'з', i: 'и', j: 'й', k: 'к', l: 'л', m: 'м',
+            n: 'н', o: 'о', p: 'п', r: 'р', s: 'с', t: 'т', u: 'у', f: 'ф', h: 'х', c: 'к'
+        };
+
+        return words.map(word => {
+            if (overrides[word]) return overrides[word];
+            let result = '';
+            for (let i = 0; i < word.length;) {
+                const token = tokens.find(item => word.startsWith(item, i));
+                if (token) {
+                    result += map[token];
+                    i += token.length;
+                } else {
+                    result += word[i];
+                    i++;
+                }
+            }
+            return result;
+        }).join(' ');
+    }
+
+    function normalizeTradeCardName(candidate, fallback) {
+        const name = String(candidate || '').trim();
+        if (/[а-яё]/i.test(name)) return name;
+        return String(fallback || name || 'Карта').trim();
+    }
+
+    function extractRankFromImage(src) {
+        const parts = String(src || '').toLowerCase().split('/').filter(Boolean);
+        const rank = parts.find(part => ['e', 'd', 'c', 'b', 'a', 's', 'ass', 'sss'].includes(part));
+        return (rank || 'e').toUpperCase();
+    }
+
+    function getTradeCardValue(card) {
+        return Math.max(0, Number(card.wanted) || 0);
+    }
+
+    function getTradeVerdict(percent, delta) {
+        if (percent >= 85) return { label: 'Очень выгодно', tone: 'var(--an-mint)' };
+        if (percent >= 58) return { label: 'Выгодно', tone: '#9bd84d' };
+        if (percent >= 46) return { label: 'Ровный обмен', tone: '#d8bd55' };
+        if (percent >= 34) return { label: 'Сомнительно', tone: '#ff8b52' };
+        if (percent <= 12) return { label: 'Очень невыгодно', tone: 'var(--an-red-bright)' };
+        return { label: 'Невыгодно', tone: 'var(--an-red-bright)' };
+    }
+
+    function calculateTradeScore(receiveCards, giveCards) {
+        const receiveScore = receiveCards.reduce((sum, card) => sum + getTradeCardValue(card), 0);
+        const giveScore = giveCards.reduce((sum, card) => sum + getTradeCardValue(card), 0);
+        const delta = receiveScore - giveScore;
+        let percent = 50;
+        if (giveScore > 0) {
+            const demandRatio = receiveScore / giveScore;
+            percent = demandRatio > 1
+                ? Math.round(58 + ((demandRatio - 1) / 0.5) * 42)
+                : Math.round((demandRatio - 0.5) * 100);
+        } else if (receiveScore > 0) {
+            percent = 100;
+        }
+        percent = Math.max(0, Math.min(100, percent));
+        return { receiveScore, giveScore, delta, percent, verdict: getTradeVerdict(percent, delta) };
+    }
+
+    async function getTradeCardStats(card) {
+        const cacheKey = `animesss_trade_card_${card.id}`;
+        const maxAge = 1000 * 60 * 60 * 12;
+        try {
+            const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+            if (cached && Date.now() - cached.cachedAt < maxAge) {
+                return { ...card, ...cached, name: normalizeTradeCardName(cached.name, card.name) };
+            }
+        } catch (e) {}
+
+        try {
+            const html = await fetchWithRetry(`/cards/users/?id=${card.id}`, 2);
+            const doc = parser.parseFromString(html, 'text/html');
+            const parsedName = doc.querySelector('.card-modal__name, .anime-card__name, .card__name, h1, h2')?.textContent?.trim();
+            const stats = {
+                name: normalizeTradeCardName(parsedName, card.name),
+                total: readStatValue(doc, '#owners-count'),
+                wanted: readStatValue(doc, '#owners-need'),
+                trade: readStatValue(doc, '#owners-trade'),
+                cachedAt: Date.now()
+            };
+            localStorage.setItem(cacheKey, JSON.stringify(stats));
+            return { ...card, ...stats };
+        } catch (e) {
+            return { ...card, total: 0, wanted: 0, trade: 0 };
+        }
+    }
+
+    function collectTradeCards(group) {
+        return [...group.querySelectorAll('a.trade__main-item[href*="/cards/users/"]')].map((link, index) => {
+            const img = link.querySelector('img');
+            const src = img?.getAttribute('src') || '';
+            const href = link.getAttribute('href') || '';
+            return {
+                id: extractCardIdFromHref(href) || `unknown-${index}`,
+                href,
+                image: src,
+                rank: extractRankFromImage(src),
+                name: prettifyCardNameFromImage(src, `Карта #${index + 1}`)
+            };
+        }).filter(card => card.id);
+    }
+
+    function renderTradeCardLine(card) {
+        return `
+            <div class="animesss-trade-card-row">
+                <img src="${escapeHtml(card.image)}" alt="">
+                <div>
+                    <div class="animesss-trade-card-name" title="${escapeHtml(card.name)}">${escapeHtml(card.name)}</div>
+                    <div class="animesss-trade-card-stats">
+                        <span>${escapeHtml(card.rank)}</span>
+                        <span>❤️ ${card.wanted}</span>
+                        <span>👥 ${card.total}</span>
+                        <span>🔄 ${card.trade}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderTradeAnalysis(panel, receiveCards, giveCards) {
+        const result = calculateTradeScore(receiveCards, giveCards);
+        const needleAngle = -180 + (result.percent * 1.8);
+        panel.innerHTML = `
+            <div class="animesss-trade-head">
+                <div>
+                    <div class="animesss-trade-kicker">◆ Animesss Trade Analyzer</div>
+                    <div class="animesss-trade-verdict" style="color:${result.verdict.tone};">${result.verdict.label}</div>
+                </div>
+            </div>
+            <div class="animesss-trade-gauge" style="--score:${result.percent}; --needle-angle:${needleAngle}deg;">
+                <svg class="animesss-trade-arc-svg" viewBox="0 0 260 138" aria-hidden="true">
+                    <path d="M 30 118 A 100 100 0 0 1 58 49" stroke="#e04a57"></path>
+                    <path d="M 60 47 A 100 100 0 0 1 100 22" stroke="#ff7b42"></path>
+                    <path d="M 104 21 A 100 100 0 0 1 156 21" stroke="#c9a449"></path>
+                    <path d="M 160 22 A 100 100 0 0 1 200 47" stroke="#8fd23d"></path>
+                    <path d="M 202 49 A 100 100 0 0 1 230 118" stroke="#4ce0a0"></path>
+                </svg>
+                <div class="animesss-trade-needle"></div>
+                <div class="animesss-trade-scale-labels"><span>Невыгодно</span><span>Ровно</span><span>Выгодно</span></div>
+            </div>
+            <div class="animesss-trade-columns">
+                <div class="animesss-trade-side">
+                    <div class="animesss-trade-side-title">Тебе предлагают</div>
+                    <div class="animesss-trade-card-list">
+                        ${receiveCards.map(renderTradeCardLine).join('') || '<div class="animesss-trade-loading">Нет карт</div>'}
+                    </div>
+                </div>
+                <div class="animesss-trade-side">
+                    <div class="animesss-trade-side-title">У тебя просят</div>
+                    <div class="animesss-trade-card-list">
+                        ${giveCards.map(renderTradeCardLine).join('') || '<div class="animesss-trade-loading">Нет карт</div>'}
+                    </div>
+                </div>
+            </div>
+        `;
+        panel.classList.remove('animesss-trade-ready');
+        requestAnimationFrame(() => panel.classList.add('animesss-trade-ready'));
+    }
+
+    function getTradeDialogFromModal(modal) {
+        return modal.closest('.ui-dialog') || modal;
+    }
+
+    function positionTradeAnalysisShell(shell, tradeDialog) {
+        if (!shell || !tradeDialog || !document.contains(tradeDialog)) return;
+        tradeDialog.style.overflow = 'visible';
+        const rect = tradeDialog.getBoundingClientRect();
+        const leftSpace = Math.max(0, rect.left - 8);
+        const shellWidth = leftSpace >= 320
+            ? Math.min(480, leftSpace)
+            : Math.min(480, Math.max(320, window.innerWidth - 24));
+        const canFitLeft = rect.left >= shellWidth + 8;
+        const canFitRight = window.innerWidth - rect.right >= shellWidth + 8;
+        shell.classList.toggle('animesss-trade-shell-right', !canFitLeft);
+        if (!canFitLeft && !canFitRight && window.innerWidth <= 920) {
+            shell.classList.remove('animesss-trade-shell-right');
+            shell.style.position = 'relative';
+            shell.style.left = 'auto';
+            shell.style.right = 'auto';
+            shell.style.top = 'auto';
+            shell.style.width = '100%';
+            shell.style.marginBottom = '12px';
+            return;
+        }
+        shell.style.position = 'absolute';
+        shell.style.width = `${shellWidth}px`;
+        shell.style.left = !canFitLeft ? '100%' : 'auto';
+        shell.style.right = canFitLeft ? '100%' : 'auto';
+        shell.style.top = '0';
+        shell.style.marginBottom = '0';
+        updateTradeToggle(shell);
+    }
+
+    function updateTradeToggle(shell) {
+        const toggle = shell?.querySelector('.animesss-trade-toggle');
+        if (!toggle) return;
+        const isRight = shell.classList.contains('animesss-trade-shell-right');
+        const isCollapsed = shell.classList.contains('animesss-trade-collapsed');
+        toggle.textContent = isCollapsed
+            ? (isRight ? '>' : '<')
+            : (isRight ? '<' : '>');
+        toggle.title = isCollapsed ? 'Показать анализ' : 'Скрыть анализ';
+    }
+
+    function removeOrphanTradeAnalysisShells() {
+        document.querySelectorAll('#animesss-trade-shell').forEach(shell => {
+            const tradeId = shell.dataset.tradeModalId;
+            const owner = tradeId ? document.querySelector(`[data-animesss-trade-modal-id="${tradeId}"]`) : null;
+            if (!owner || !document.contains(owner)) shell.remove();
+        });
+    }
+
+    async function analyzeTradeModal(modal) {
+        if (!modal || modal.dataset.animesssTradeAnalyzed === '1') return;
+        const groups = modal.querySelectorAll('.trade__main-items');
+        if (groups.length < 2) return;
+        modal.dataset.animesssTradeAnalyzed = '1';
+        if (!modal.dataset.animesssTradeModalId) {
+            modal.dataset.animesssTradeModalId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        }
+
+        let shell = document.querySelector(`#animesss-trade-shell[data-trade-modal-id="${modal.dataset.animesssTradeModalId}"]`);
+        if (!shell) {
+            shell = document.createElement('div');
+            shell.id = 'animesss-trade-shell';
+            shell.dataset.tradeModalId = modal.dataset.animesssTradeModalId;
+            shell.className = 'animesss-trade-collapsed';
+            shell.innerHTML = '<button type="button" class="animesss-trade-toggle" title="Показать анализ">&lt;</button><div id="animesss-trade-analysis"><div class="animesss-trade-loading">Анализирую обмен...</div></div>';
+            shell.querySelector('.animesss-trade-toggle').addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                shell.classList.toggle('animesss-trade-collapsed');
+                updateTradeToggle(shell);
+            });
+        }
+        const panel = shell.querySelector('#animesss-trade-analysis');
+        const tradeDialog = getTradeDialogFromModal(modal);
+        if (shell.parentNode !== tradeDialog) tradeDialog.appendChild(shell);
+        positionTradeAnalysisShell(shell, tradeDialog);
+
+        const receiveBase = collectTradeCards(groups[0]);
+        const giveBase = collectTradeCards(groups[1]);
+        const receiveCards = await Promise.all(receiveBase.map(getTradeCardStats));
+        const giveCards = await Promise.all(giveBase.map(getTradeCardStats));
+        receiveCards.forEach(card => { card.score = getTradeCardValue(card); });
+        giveCards.forEach(card => { card.score = getTradeCardValue(card); });
+        renderTradeAnalysis(panel, receiveCards, giveCards);
+        positionTradeAnalysisShell(shell, tradeDialog);
+    }
+
+    function observeTradeChanges() {
+        const scan = () => {
+            removeOrphanTradeAnalysisShells();
+            document.querySelectorAll('#trade-card-modal').forEach(analyzeTradeModal);
+            document.querySelectorAll('#animesss-trade-shell').forEach(shell => {
+                const owner = document.querySelector(`[data-animesss-trade-modal-id="${shell.dataset.tradeModalId}"]`);
+                if (owner) positionTradeAnalysisShell(shell, getTradeDialogFromModal(owner));
+            });
+        };
+        scan();
+        const observer = new MutationObserver(() => {
+            clearTimeout(window.animesssTradeObserverTimer);
+            window.animesssTradeObserverTimer = setTimeout(scan, 120);
+        });
+        observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+        window.addEventListener('resize', scan);
     }
 
     window.animesssRefreshResults = () => {
@@ -1034,7 +1681,8 @@
                 });
             }
 
-            const cardsToScan = allCards.filter(card => card.total === undefined || card.wanted === undefined || card.trade === undefined || !card.lastUpdate);
+            allCards.forEach(normalizeCardStats);
+            const cardsToScan = allCards.filter(card => !hasCompleteStats(card) || !card.lastUpdate);
 
             // ===== SCANSPEED =====
             // Пауза между запросами карт (в миллисекундах). Раньше было 700 и всё
@@ -1064,12 +1712,13 @@
                 try {
                     const html = await fetchWithRetry(`/cards/users/?id=${card.id}`);
                     const doc = parser.parseFromString(html, 'text/html');
-                    card.total = Number(doc.querySelector('#owners-count')?.textContent || 0);
-                    card.wanted = Number(doc.querySelector('#owners-need')?.textContent || 0);
-                    card.trade = Number(doc.querySelector('#owners-trade')?.textContent || 0);
+                    card.total = readStatValue(doc, '#owners-count');
+                    card.wanted = readStatValue(doc, '#owners-need');
+                    card.trade = readStatValue(doc, '#owners-trade');
                     card.lastUpdate = Date.now();
                 } catch (e) {
-                    card.total = -1; card.wanted = -1; card.trade = -1; card.lastUpdate = Date.now();
+                    normalizeCardStats(card);
+                    delete card.lastUpdate;
                 }
 
                 const completed = i + 1;
@@ -1090,7 +1739,7 @@
                 }
             }
 
-            window.animesssResults = allCards;
+            window.animesssResults = allCards.map(normalizeCardStats);
             allCards.forEach(card => savedMap.set(String(card.id), card));
             localStorage.setItem(cacheKey, JSON.stringify([...savedMap.values()]));
 
@@ -1169,9 +1818,9 @@
         try {
             const html = await fetchWithRetry(`/cards/users/?id=${idStr}`);
             const doc = parser.parseFromString(html, 'text/html');
-            const total = Number(doc.querySelector('#owners-count')?.textContent || 0);
-            const wanted = Number(doc.querySelector('#owners-need')?.textContent || 0);
-            const trade = Number(doc.querySelector('#owners-trade')?.textContent || 0);
+            const total = readStatValue(doc, '#owners-count');
+            const wanted = readStatValue(doc, '#owners-need');
+            const trade = readStatValue(doc, '#owners-trade');
             if (window.animesssResults) {
                 const card = window.animesssResults.find(c => String(c.id) === idStr);
                 if (card) { card.total = total; card.wanted = wanted; card.trade = trade; card.lastUpdate = Date.now(); }
@@ -1226,13 +1875,14 @@
         let shouldAnimateIntroStats = animateIntroStats && !window.animesssIntroStatsAnimated;
         const rankWeight = { e: 1, d: 2, c: 4, b: 8, a: 16, s: 32, ass: 64, sss: 128 };
         const enriched = cards.map(card => {
+            const safeCard = normalizeCardStats({ ...card });
             const rank = rankWeight[(card.rank || '').toLowerCase()] || 1;
             return {
-                ...card,
-                valueScore: (rank * 1000) + (card.wanted * 10),
-                rareScore: (rank * 100000) - card.total,
-                demandScore: card.wanted,
-                trashScore: ((1000 - rank) * 100) - (card.wanted * 10)
+                ...safeCard,
+                valueScore: (rank * 1000) + (safeCard.wanted * 10),
+                rareScore: (rank * 100000) - safeCard.total,
+                demandScore: safeCard.wanted,
+                trashScore: ((1000 - rank) * 100) - (safeCard.wanted * 10)
             };
         });
 
@@ -1645,6 +2295,7 @@
                         <li style="margin-bottom: 10px;">◆ Показывает лучшие, редкие, востребованные и худшие карты отдельными вкладками.</li>
                         <li style="margin-bottom: 10px;">◆ Подсвечивает новые карты и умеет обновлять статистику при наведении.</li>
                         <li style="margin-bottom: 10px;">◆ Помогает оценивать выбор в паках и показывает BEST/NORMAL/TRASH.</li>
+                        <li style="margin-bottom: 10px;">◆ Анализирует трейды и показывает, насколько предложенный обмен выгоден.</li>
                         <li style="margin-bottom: 10px;">◆ &#1055;&#1086;&#1079;&#1074;&#1086;&#1083;&#1103;&#1077;&#1090; &#1087;&#1086;&#1083;&#1091;&#1095;&#1072;&#1090;&#1100; &#1074;&#1099;&#1087;&#1072;&#1076;&#1072;&#1102;&#1097;&#1080;&#1077; &#1082;&#1072;&#1088;&#1090;&#1086;&#1095;&#1082;&#1080; &#1087;&#1088;&#1103;&#1084;&#1086; &#1074; &#1087;&#1086;&#1083;&#1085;&#1086;&#1101;&#1082;&#1088;&#1072;&#1085;&#1085;&#1086;&#1084; &#1088;&#1077;&#1078;&#1080;&#1084;&#1077; Kodik — &#1073;&#1077;&#1079; &#1074;&#1099;&#1093;&#1086;&#1076;&#1072; &#1080;&#1079; &#1087;&#1088;&#1086;&#1089;&#1084;&#1086;&#1090;&#1088;&#1072;.</li>
                     </ul>
                     <p style="margin:18px 0 0; color:var(--an-ink); font-weight:700; text-align:center;">
@@ -1665,8 +2316,8 @@
     }
 
     function showUpdateNotification() {
-        const ver = "4.1";
-        const key = `animesss_update_v${ver}_fullscreen_cards_shown`;
+        const ver = "4.2";
+        const key = `animesss_update_v${ver}_trade_analyzer_shown`;
         if (localStorage.getItem(key)) return;
         if (!document.body) { setTimeout(showUpdateNotification, 1000); return; }
 
@@ -1676,29 +2327,34 @@
         modal.innerHTML = `
             <div style="background: var(--an-panel); border: 1px solid var(--an-line); border-top: 2px solid var(--an-red); border-radius: 20px; padding: 40px; max-width: 600px; color: var(--an-ink); box-shadow: 0 24px 70px rgba(0,0,0,.6), 0 0 40px rgba(214,48,74,.15); animation: animesssCardAppear 0.5s ease;">
                 <div style="font-family:var(--an-body); font-weight:700; font-size:11px; letter-spacing:2px; color:var(--an-red); text-transform:uppercase; text-align:center; margin-bottom:10px;">◆ Animesss Analyzer · v${ver}</div>
-                <div class="animesss-shimmer-title" style="font-family:var(--an-display); font-size: 31px; font-weight: 800; margin-bottom: 16px; text-align: center;">&#1055;&#1086;&#1083;&#1085;&#1086;&#1101;&#1082;&#1088;&#1072;&#1085;&#1085;&#1072;&#1103; &#1087;&#1086;&#1073;&#1077;&#1076;&#1072;</div>
-                <div style="height:78px; margin:0 auto 22px; max-width:360px; position:relative; overflow:hidden; border-radius:18px; background:radial-gradient(circle at 50% 50%, rgba(255,90,114,.32), rgba(214,48,74,.12) 32%, transparent 68%); box-shadow:0 0 34px rgba(214,48,74,.28) inset;">
-                    <span style="position:absolute; left:48%; top:50%; width:5px; height:5px; border-radius:50%; background:var(--an-red-bright); box-shadow:0 -28px 0 rgba(255,90,114,.8), 24px -16px 0 rgba(232,165,152,.8), 30px 12px 0 rgba(255,90,114,.75), 8px 30px 0 rgba(214,48,74,.85), -22px 22px 0 rgba(232,165,152,.75), -32px -8px 0 rgba(255,90,114,.7), -8px -34px 0 rgba(214,48,74,.9); transform:scale(1.35);"></span>
-                    <span style="position:absolute; left:50%; top:50%; width:130px; height:1px; background:linear-gradient(90deg, transparent, rgba(255,90,114,.75), transparent); transform:translate(-50%,-50%) rotate(0deg); box-shadow:0 0 16px rgba(255,90,114,.45);"></span>
-                    <span style="position:absolute; left:50%; top:50%; width:130px; height:1px; background:linear-gradient(90deg, transparent, rgba(255,90,114,.75), transparent); transform:translate(-50%,-50%) rotate(45deg); box-shadow:0 0 16px rgba(255,90,114,.45);"></span>
-                    <span style="position:absolute; left:50%; top:50%; width:130px; height:1px; background:linear-gradient(90deg, transparent, rgba(255,90,114,.75), transparent); transform:translate(-50%,-50%) rotate(90deg); box-shadow:0 0 16px rgba(255,90,114,.45);"></span>
-                    <span style="position:absolute; left:50%; top:50%; width:130px; height:1px; background:linear-gradient(90deg, transparent, rgba(255,90,114,.75), transparent); transform:translate(-50%,-50%) rotate(135deg); box-shadow:0 0 16px rgba(255,90,114,.45);"></span>
+                <div class="animesss-shimmer-title" style="font-family:var(--an-display); font-size:31px; font-weight:800; margin-bottom:4px; text-align:center;">Трейды под контролем</div>
+                <div class="animesss-trade-gauge" style="--needle-angle:-36deg; margin-bottom:12px;">
+                    <svg class="animesss-trade-arc-svg" viewBox="0 0 260 138" aria-hidden="true">
+                        <path d="M 30 118 A 100 100 0 0 1 58 49" stroke="#e04a57"></path>
+                        <path d="M 60 47 A 100 100 0 0 1 100 22" stroke="#ff7b42"></path>
+                        <path d="M 104 21 A 100 100 0 0 1 156 21" stroke="#c9a449"></path>
+                        <path d="M 160 22 A 100 100 0 0 1 200 47" stroke="#8fd23d"></path>
+                        <path d="M 202 49 A 100 100 0 0 1 230 118" stroke="#4ce0a0"></path>
+                    </svg>
+                    <div class="animesss-trade-needle" style="animation:animesssTradeNeedleTwitch 1.35s ease-in-out .65s infinite;"></div>
+                    <div class="animesss-trade-scale-labels"><span>Невыгодно</span><span>Ровно</span><span>Выгодно</span></div>
                 </div>
                 <div style="font-size: 15.5px; line-height: 1.75; margin-bottom: 30px; color: var(--an-ink-dim);">
-                    <div style="padding:18px 18px; border-radius:16px; background:linear-gradient(135deg, rgba(214,48,74,.2), rgba(255,90,114,.1)); border:1px solid rgba(255,90,114,.35); box-shadow:0 0 30px rgba(214,48,74,.24);">
-                        <div style="color:var(--an-red-bright); font-family:var(--an-display); font-weight:800; font-size:18px; margin-bottom:8px;">&#1042;&#1099; &#1076;&#1086;&#1083;&#1075;&#1086; &#1101;&#1090;&#1086;&#1075;&#1086; &#1078;&#1076;&#1072;&#1083;&#1080;, &#1080; &#1091; &#1084;&#1077;&#1085;&#1103; &#1085;&#1072;&#1082;&#1086;&#1085;&#1077;&#1094;-&#1090;&#1086; &#1087;&#1086;&#1083;&#1091;&#1095;&#1080;&#1083;&#1086;&#1089;&#1100;!</div>
-                        <div style="color:var(--an-ink); font-weight:700;">&#1058;&#1077;&#1087;&#1077;&#1088;&#1100; &#1074;&#1099;&#1087;&#1072;&#1076;&#1072;&#1102;&#1097;&#1080;&#1077; &#1082;&#1072;&#1088;&#1090;&#1086;&#1095;&#1082;&#1080; &#1084;&#1086;&#1078;&#1085;&#1086; &#1079;&#1072;&#1073;&#1080;&#1088;&#1072;&#1090;&#1100; &#1087;&#1088;&#1103;&#1084;&#1086; &#1074; &#1087;&#1086;&#1083;&#1085;&#1086;&#1101;&#1082;&#1088;&#1072;&#1085;&#1085;&#1086;&#1084; &#1088;&#1077;&#1078;&#1080;&#1084;&#1077;.</div>
-                        <div style="margin-top:8px;">&#1041;&#1086;&#1083;&#1100;&#1096;&#1077; &#1085;&#1077; &#1085;&#1091;&#1078;&#1085;&#1086; &#1074;&#1099;&#1093;&#1086;&#1076;&#1080;&#1090;&#1100; &#1080;&#1079; &#1087;&#1088;&#1086;&#1089;&#1084;&#1086;&#1090;&#1088;&#1072;, &#1095;&#1090;&#1086;&#1073;&#1099; &#1087;&#1086;&#1076;&#1085;&#1103;&#1090;&#1100; &#1085;&#1072;&#1075;&#1088;&#1072;&#1076;&#1091;.</div>
+                    <div style="padding:18px; border-radius:12px; background:linear-gradient(135deg, rgba(214,48,74,.18), rgba(76,224,160,.07)); border:1px solid rgba(255,90,114,.3); box-shadow:0 0 30px rgba(214,48,74,.18);">
+                        <div style="color:var(--an-red-bright); font-family:var(--an-display); font-weight:800; font-size:18px; margin-bottom:8px;">Новая возможность</div>
+                        <div style="color:var(--an-ink); font-weight:700;">Я добавил возможность анализировать трейды.</div>
+                        <div style="margin-top:8px;">Открой предложение обмена, разверни анализатор и сразу увидишь, насколько этот трейд выгоден для тебя.</div>
                     </div>
                 </div>
                 <button id="animesss-upd-close" style="width: 100%; padding: 15px; border: none; border-radius: 12px; background: linear-gradient(135deg, var(--an-red), var(--an-red-bright)); color: #fff5f6; font-family:var(--an-body); font-weight: 700; font-size: 16px; cursor: pointer; transition: transform .2s, box-shadow .2s;"
                         onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 10px 24px rgba(214,48,74,.35)';"
-                        onmouseout="this.style.transform=''; this.style.boxShadow='';">ПОСМОТРЕТЬ ⚡</button>
+                        onmouseout="this.style.transform=''; this.style.boxShadow='';">ПОНЯТНО</button>
             </div>`;
         document.body.appendChild(modal);
         modal.querySelector('#animesss-upd-close').onclick = () => { modal.remove(); localStorage.setItem(key, 'true'); };
     }
 
+    observeTradeChanges();
     if (location.pathname.startsWith('/user/cards/')) { createUI(); }
     else if (location.pathname.startsWith('/cards/pack/')) { observePackChanges(); }
     setTimeout(showIntroNotification, 500);
